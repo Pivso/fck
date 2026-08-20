@@ -1,0 +1,8 @@
+# Line endings are decided here, per-repo, not by each machine's core.autocrlf.
+# Everything text is LF in the repository *and* in the working tree, so the
+# bytes are identical on every OS. text=auto still auto-detects binaries.
+* text=auto eol=lf
+
+# Except the two formats that genuinely require CRLF to run on Windows.
+*.bat text eol=crlf
+*.cmd text eol=crlf
