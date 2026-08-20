@@ -14,6 +14,31 @@ authors = [{ name = "Tomáš Cerman", email = "t.cerman@gmail.com" }]
 # "License :: ..." trove classifier -- setuptools rejects that combination.
 license = "MIT"
 license-files = ["LICENSE"]
+keywords = ["profanity", "swearing", "stress", "humour", "satire", "cli"]
+classifiers = [
+    # No "License :: ..." entry here on purpose: setuptools rejects a trove
+    # license classifier alongside the SPDX expression above.
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/Pivso/fck"
+Repository = "https://github.com/Pivso/fck"
+Issues = "https://github.com/Pivso/fck/issues"
 
 [project.scripts]
 fck = "fck.__main__:main"
