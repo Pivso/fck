@@ -1,5 +1,7 @@
 """Template filling. Small on purpose: pick a template, fill its slots, tidy up."""
 
+from __future__ import annotations
+
 import random
 import re
 
@@ -33,7 +35,7 @@ PROFANE_RE = re.compile(
 )
 
 
-def has_profanity(text):
+def has_profanity(text: str) -> bool:
     return bool(PROFANE_RE.search(text))
 
 
@@ -45,12 +47,12 @@ _MILD = {
 }
 
 
-def seed(value):
+def seed(value: object) -> None:
     """Pin the RNG so output is reproducible. Mostly for tests and grudges."""
     _rng.seed(value)
 
 
-def clamp(intensity):
+def clamp(intensity: int) -> int:
     return max(1, min(3, int(intensity)))
 
 

@@ -1,8 +1,22 @@
 import io
+import re
 import unittest
 
 import fck
 from fck import _engine, _lexicon
+
+
+def came_from(text, pool):
+    """True if `text` could have been rendered from any template in `pool`.
+
+    Compares structure rather than prefixes, so adding phrasings to a pool
+    does not break the ordering tests.
+    """
+    for template in pool:
+        pattern = "^" + re.sub(r"\\\{\w+\\\}", ".+", re.escape(template)) + "$"
+        if re.match(pattern, text):
+            return True
+    return False
 
 
 class TestTemplates(unittest.TestCase):
@@ -31,6 +45,33 @@ class TestTemplates(unittest.TestCase):
     def test_article_agreement(self):
         out = _engine.fill("It is a {adj} {noun}.", "x", 2)
         self.assertNotRegex(out, r"\ba [aeiou]")
+
+    def test_no_literal_profanity_in_templates(self):
+        """Invariant 2: swearing enters via tiered slots, never as literal
+        template text -- otherwise it cannot be dialled down for intensity 1."""
+        pools = {
+            "CURSE": _lexicon.CURSE, "AFFIRMATION": _lexicon.AFFIRMATION,
+            "QUIT": _lexicon.QUIT, "ESCALATION": _lexicon.ESCALATION,
+            "CLOSER": _lexicon.CLOSER, "INHALE": _lexicon.INHALE,
+            "HOLD": _lexicon.HOLD, "EXHALE": _lexicon.EXHALE,
+            "BREATH_CLOSE": _lexicon.BREATH_CLOSE,
+        }
+        for name, pool in pools.items():
+            for template in pool:
+                bare = re.sub(r"\{\w+\}", "", template)
+                self.assertFalse(
+                    _engine.has_profanity(bare), f"{name}: {template}"
+                )
+
+    def test_mild_pools_keep_enough_variety(self):
+        """Tier 1 pools are derived by filtering, so they shrink silently as
+        filthier words are added. Guard the floor."""
+        for name, pool in _engine._MILD.items():
+            self.assertGreaterEqual(len(pool), 10, f"tier-1 pool '{name}' is thin")
+            full = len(_engine._POOLS[name])
+            self.assertGreaterEqual(
+                len(pool), full * 0.5, f"tier-1 pool '{name}' lost half its words"
+            )
 
 
 class TestApi(unittest.TestCase):
@@ -72,9 +113,9 @@ class TestApi(unittest.TestCase):
         self.assertEqual(len(steps), 2 * 3 + 1)
         for cycle in range(2):
             inhale, hold, exhale = steps[cycle * 3:cycle * 3 + 3]
-            self.assertIn(inhale, [t.replace("{target}", "x") for t in _lexicon.INHALE])
-            self.assertTrue(hold.lower().startswith("hold"))
-            self.assertTrue(exhale.lower().startswith("out"))
+            self.assertTrue(came_from(inhale, _lexicon.INHALE), inhale)
+            self.assertTrue(came_from(hold, _lexicon.HOLD), hold)
+            self.assertTrue(came_from(exhale, _lexicon.EXHALE), exhale)
 
     def test_breathe_rejects_zero_cycles(self):
         with self.assertRaises(ValueError):
@@ -85,8 +126,13 @@ class TestApi(unittest.TestCase):
         hard = ("fuck", "shit", "piss", "cunt", "arse", "bollocks", "wank")
         fck.seed(0)
         for _ in range(300):
+            try:
+                fck.rage_quit("x", 1)
+            except fck.RageQuit as exc:
+                quit_line = str(exc)
             for text in (fck.curse("x", 1), fck.affirm("x", 1),
-                         fck.vent("x", 1), " ".join(fck.breathe("x", 1))):
+                         fck.vent("x", 1), " ".join(fck.breathe("x", 1)),
+                         quit_line):
                 low = text.lower()
                 for word in hard:
                     self.assertNotIn(word, low, text)

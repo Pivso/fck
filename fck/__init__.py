@@ -8,11 +8,24 @@ industry and then ruined. Swear at the build, not at your colleagues.
     >>> fck.curse("the deploy")          # doctest: +SKIP
     'The deploy is a fucking festering shitshow and I want it given to the sea.'
 
-Intensity runs 1 (client in the room) to 3 (unhinged). Default is 2.
+Every generator takes the same two arguments:
+
+target      the thing that has wronged you, interpolated into the output.
+            A situation or an object -- "the deploy", "Tuesday". Not a person.
+intensity   1 contains no profanity at all and is safe to print in front of a
+            client; 2 is the default and swears freely; 3 is unhinged. Values
+            outside 1-3 are clamped, never rejected.
+
+Output is random unless you call seed() first. Nothing here touches the
+filesystem, the network, or the process -- functions return strings, except
+serenity() which prints and rage_quit() which raises.
 """
+
+from __future__ import annotations
 
 import functools
 import sys
+from typing import Callable, TextIO, TypeVar
 
 from . import _engine as _e
 from . import _lexicon as _lex
@@ -23,6 +36,8 @@ __all__ = [
     "stress_ball", "bleep", "seed", "RageQuit",
 ]
 
+F = TypeVar("F", bound=Callable[..., object])
+
 seed = _e.seed
 
 
@@ -30,13 +45,34 @@ class RageQuit(Exception):
     """Raised by rage_quit(). Catch it if you must, coward."""
 
 
-def curse(target="this", intensity=2):
-    """One expletive-bearing sentence about `target`."""
+def curse(target: str = "this", intensity: int = 2) -> str:
+    """Return one expletive-bearing sentence about `target`.
+
+    Args:
+        target: what has wronged you, e.g. "the deploy".
+        intensity: 1 (clean) to 3 (unhinged); out-of-range values are clamped.
+
+    Returns:
+        A single sentence. Never empty, never multi-line.
+    """
     return _e.pick(_lex.CURSE, target, intensity)
 
 
-def vent(about="this", intensity=2, lines=3):
-    """A short rant. Escalates, then talks itself down. Returns one string."""
+def vent(about: str = "this", intensity: int = 2, lines: int = 3) -> str:
+    """Return a rant that escalates, then talks itself down.
+
+    Args:
+        about: what has wronged you.
+        intensity: 1 (clean) to 3 (unhinged); clamped.
+        lines: how many complaints to make. Must be at least 1.
+
+    Returns:
+        One newline-joined string of ``lines * 2`` lines: each complaint after
+        the first is preceded by a connective, and a closing line is appended.
+
+    Raises:
+        ValueError: if `lines` is less than 1.
+    """
     if lines < 1:
         raise ValueError("you cannot vent zero lines, that is called repression")
     body = _e.sample(_lex.CURSE, lines, about, intensity)
@@ -49,14 +85,34 @@ def vent(about="this", intensity=2, lines=3):
     return "\n".join(out)
 
 
-def affirm(target="this", intensity=2):
-    """A daily affirmation, as ruined by circumstance."""
+def affirm(target: str = "this", intensity: int = 2) -> str:
+    """Return a daily affirmation, as ruined by circumstance.
+
+    Args:
+        target: what has wronged you.
+        intensity: 1 (clean) to 3 (unhinged); clamped.
+
+    Returns:
+        A single line of wellness advice that has gone wrong.
+    """
     return _e.pick(_lex.AFFIRMATION, target, intensity)
 
 
-def breathe(target="this", intensity=2, cycles=3):
-    """Box breathing, adapted. Returns ordered steps: inhale, hold, exhale per
-    cycle, then one closing line."""
+def breathe(target: str = "this", intensity: int = 2, cycles: int = 3) -> list[str]:
+    """Return box-breathing instructions, adapted.
+
+    Args:
+        target: what to picture while breathing.
+        intensity: 1 (clean) to 3 (unhinged); clamped.
+        cycles: how many breath cycles. Must be at least 1.
+
+    Returns:
+        ``cycles * 3 + 1`` steps in order -- inhale, hold, exhale per cycle,
+        then one closing line. Printing them is left to the caller.
+
+    Raises:
+        ValueError: if `cycles` is less than 1.
+    """
     if cycles < 1:
         raise ValueError("zero breathing cycles is just holding your breath")
     steps = []
@@ -68,8 +124,16 @@ def breathe(target="this", intensity=2, cycles=3):
     return steps
 
 
-def serenity(target="this", intensity=2):
-    """The full guided session: breathe, swear, affirm. Prints it, slowly-ish."""
+def serenity(target: str = "this", intensity: int = 2) -> None:
+    """Print a full guided session: breathe, then curse, then affirm.
+
+    The only function here that writes to stdout. Use breathe(), curse() and
+    affirm() directly if you want the strings instead.
+
+    Args:
+        target: what has wronged you.
+        intensity: 1 (clean) to 3 (unhinged); clamped.
+    """
     print("--- fck: guided session ---")
     for step in breathe(target, intensity):
         print(f"  {step}")
@@ -80,19 +144,48 @@ def serenity(target="this", intensity=2):
     print("--- session complete. namaste, you absolute trooper. ---")
 
 
-def rage_quit(reason="this", intensity=3):
-    """Leave, dramatically. Raises RageQuit; it does not kill your process."""
+def rage_quit(reason: str = "this", intensity: int = 3) -> None:
+    """Leave, dramatically, by raising RageQuit.
+
+    Raises an exception rather than exiting: it will not kill your process or
+    your interpreter, and it can be caught like anything else.
+
+    Args:
+        reason: what drove you to this.
+        intensity: 1 (clean) to 3 (unhinged); clamped. Defaults to 3.
+
+    Raises:
+        RageQuit: always. That is the entire function.
+    """
     raise RageQuit(_e.pick(_lex.QUIT, reason, intensity))
 
 
-def stress_ball(func=None, *, intensity=2, stream=None):
-    """Decorator: swears on your behalf when the wrapped function raises, then
-    re-raises. It does not swallow the error -- that would be a different sin.
+def stress_ball(
+    func: F | None = None,
+    *,
+    intensity: int = 2,
+    stream: TextIO | None = None,
+) -> F | Callable[[F], F]:
+    """Decorate a function so it swears when it raises, then re-raises.
+
+    The exception is never swallowed -- swearing about a problem is not the
+    same as handling it. Usable bare or called::
 
         @stress_ball
         def load_config(): ...
+
+        @stress_ball(intensity=3)
+        def deploy(): ...
+
+    Args:
+        func: supplied automatically when used bare.
+        intensity: 1 (clean) to 3 (unhinged); clamped.
+        stream: where to write the curse. Defaults to sys.stderr.
+
+    Returns:
+        The wrapped function, with its name, docstring and signature intact.
     """
-    def decorate(fn):
+    def decorate(fn: F) -> F:
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
             try:
@@ -101,12 +194,24 @@ def stress_ball(func=None, *, intensity=2, stream=None):
                 target = f"{fn.__name__}() and its {type(exc).__name__}"
                 print(curse(target, intensity), file=stream or sys.stderr)
                 raise
-        return wrapper
+        return wrapper  # type: ignore[return-value]
     return decorate(func) if func is not None else decorate
 
 
-def bleep(text, char="*"):
-    """Censor the profanity, keep the rage. For when someone walks past."""
+def bleep(text: str, char: str = "*") -> str:
+    """Censor the profanity in `text`, keeping the rage and the word shape.
+
+    Whole words only, case-insensitive, first letter preserved: "fuck" becomes
+    "f***". Words that merely contain a rude substring are left alone, so
+    "scunthorpe" survives.
+
+    Args:
+        text: any string, typically the output of another function here.
+        char: the masking character.
+
+    Returns:
+        The text with known profanity masked. Everything else is untouched.
+    """
     def censor(match):
         word = match.group(0)
         return word[0] + char * (len(word) - 1)
