@@ -1,5 +1,7 @@
 # fck
 
+[![CI](https://github.com/Pivso/fck/actions/workflows/ci.yml/badge.svg)](https://github.com/Pivso/fck/actions/workflows/ci.yml)
+
 A mindfulness and wellbeing framework for people who are done.
 
 Every function is a stress-relief technique borrowed from the wellness industry
