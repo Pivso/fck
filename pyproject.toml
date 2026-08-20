@@ -4,7 +4,9 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fck"
+# Distribution name only. The package is still imported as `fck` and the console
+# script is still `fck`; PyPI rejects "fck" as too similar to the existing "f-ck".
+name = "mindfck"
 version = "0.1.0"
 description = "A mindfulness and wellbeing framework for people who are done."
 readme = "README.md"

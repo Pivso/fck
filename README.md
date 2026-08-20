@@ -14,8 +14,22 @@ pull requests that change it will be closed with feeling.
 ## Install
 
 ```bash
-pip install -e .
+pip install mindfck
 ```
+
+Installed as `mindfck`, imported as `fck`. PyPI considers the name `fck` too
+similar to an existing project, so the package on the index wears the longer
+name and everything else stays short:
+
+```python
+import fck          # not mindfck
+```
+
+```bash
+fck "the deploy"    # the command is still fck
+```
+
+From a checkout instead: `pip install -e .`
 
 ## Use
 
