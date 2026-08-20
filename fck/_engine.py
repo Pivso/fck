@@ -8,6 +8,7 @@ import re
 from . import _lexicon as lex
 
 _SLOT = re.compile(r"\{(\w+)\}")
+_TARGET_SLOT = re.compile(r"\{([Tt])arget\}")
 _A_BEFORE_VOWEL = re.compile(r"\ba (?=[aeiouAEIOU])")
 
 _rng = random.Random()
@@ -30,7 +31,11 @@ _POOLS = {
 }
 
 PROFANE_RE = re.compile(
-    r"\b(?:%s)\b" % "|".join(sorted(map(re.escape, lex.PROFANE), key=len, reverse=True)),
+    # Sorted longest-first, then alphabetically: PROFANE is a set, so without the
+    # tiebreak the compiled pattern would differ between runs (hash seeding).
+    r"\b(?:%s)\b" % "|".join(
+        sorted(map(re.escape, lex.PROFANE), key=lambda w: (-len(w), w))
+    ),
     re.IGNORECASE,
 )
 
@@ -56,18 +61,29 @@ def clamp(intensity: int) -> int:
     return max(1, min(3, int(intensity)))
 
 
+def _has_unresolved_slot(text):
+    """Any slot still to fill, ignoring {target} -- that one is done last."""
+    return any(m.group(1).lower() != "target" for m in _SLOT.finditer(text))
+
+
 def fill(template, target, intensity, rng=None):
-    """Resolve {slots} in `template`. Capitalised slots capitalise their value."""
+    """Resolve {slots} in `template`. Capitalised slots capitalise their value.
+
+    `target` is caller-supplied, so it is substituted in a single final pass and
+    never rescanned. Otherwise a target like "{noun}" would be interpreted as
+    template syntax, and "{bogus}" would raise KeyError from ordinary input.
+    """
     rng = rng or _rng
     intensity = clamp(intensity)
+    target = str(target)
     pinned = {}
 
     def replace(match):
         key = match.group(1)
         low = key.lower()
         if low == "target":
-            value = target
-        elif low in _TIERED:
+            return match.group(0)  # left alone; resolved after the loop
+        if low in _TIERED:
             value = pinned.setdefault(low, rng.choice(_TIERED[low][intensity]))
         else:
             pools = _MILD if intensity == 1 else _POOLS
@@ -76,9 +92,16 @@ def fill(template, target, intensity, rng=None):
 
     text = template
     for _ in range(4):  # slots can nest; 4 passes is plenty
-        if not _SLOT.search(text):
+        if not _has_unresolved_slot(text):
             break
         text = _SLOT.sub(replace, text)
+
+    def put_target(match):
+        if match.group(1) == "T":
+            return target[:1].upper() + target[1:]
+        return target
+
+    text = _TARGET_SLOT.sub(put_target, text)
     return _A_BEFORE_VOWEL.sub("an ", text)
 
 

@@ -75,7 +75,7 @@ def vent(about: str = "this", intensity: int = 2, lines: int = 3) -> str:
     """
     if lines < 1:
         raise ValueError("you cannot vent zero lines, that is called repression")
-    body = _e.sample(_lex.CURSE, lines, about, intensity)
+    body = _e.fanout(_lex.CURSE, lines, about, intensity)
     links = _e.fanout(_lex.ESCALATION, lines - 1, about, intensity)
     out = [body[0]]
     for link, line in zip(links, body[1:]):

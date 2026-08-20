@@ -1,3 +1,4 @@
+import contextlib
 import io
 import re
 import unittest
@@ -98,10 +99,10 @@ class TestApi(unittest.TestCase):
         self.assertEqual(len(fck.vent("x", lines=1).splitlines()), 2)
 
     def test_long_vent_keeps_every_line(self):
-        """Escalation pool is small; a long rant must not silently lose curses."""
+        """Both pools are finite; a long rant must not silently lose lines."""
         fck.seed(11)
-        n = len(_lexicon.ESCALATION) + 4
-        self.assertEqual(len(fck.vent("x", lines=n).splitlines()), n * 2)
+        for n in (len(_lexicon.ESCALATION) + 4, len(_lexicon.CURSE) + 12, 100):
+            self.assertEqual(len(fck.vent("x", lines=n).splitlines()), n * 2, n)
 
     def test_vent_rejects_zero_lines(self):
         with self.assertRaises(ValueError):
@@ -155,6 +156,44 @@ class TestApi(unittest.TestCase):
             fck.rage_quit("the sprint")
 
 
+class TestUntrustedTarget(unittest.TestCase):
+    """`target` is caller-supplied and must never be treated as template syntax."""
+
+    def test_braces_in_target_are_kept_literal(self):
+        fck.seed(1)
+        for probe in ("{noun}", "{adj} {noun}", "{target}", "{Target}"):
+            for intensity in (1, 2, 3):
+                self.assertIn(probe, fck.curse(probe, intensity))
+
+    def test_unknown_slot_in_target_does_not_raise(self):
+        """Ordinary input like "{bogus}" used to raise KeyError."""
+        fck.seed(2)
+        for _ in range(50):
+            self.assertIn("{bogus}", fck.curse("{bogus}"))
+        self.assertIn("{bogus}", fck.vent("{bogus}", lines=2))
+        self.assertIn("{bogus}", " ".join(fck.breathe("{bogus}")))
+
+    def test_regex_metacharacters_in_target_are_safe(self):
+        fck.seed(3)
+        for probe in (r"\d+", "(", "[", "$1", "\\", "a" * 500):
+            # Compared case-insensitively: a {Target} slot at the start of a
+            # sentence legitimately capitalises the first letter.
+            self.assertIn(probe.lower(), fck.curse(probe).lower())
+
+    def test_non_string_targets_are_coerced(self):
+        fck.seed(4)
+        self.assertIn("123", fck.curse(123))
+        self.assertIn("None", fck.curse(None))
+
+
+class TestDeterminism(unittest.TestCase):
+    def test_profanity_pattern_is_stable(self):
+        """PROFANE is a set; without a tiebreak the pattern varies per process."""
+        words = sorted(map(__import__("re").escape, _lexicon.PROFANE),
+                       key=lambda w: (-len(w), w))
+        self.assertIn("|".join(words), _engine.PROFANE_RE.pattern)
+
+
 class TestStressBall(unittest.TestCase):
     def test_reraises_and_swears(self):
         stream = io.StringIO()
@@ -183,6 +222,63 @@ class TestStressBall(unittest.TestCase):
         self.assertEqual(named.__name__, "named")
         self.assertEqual(named.__doc__, "docstring")
         self.assertEqual(named(1), 3)
+
+
+class TestCli(unittest.TestCase):
+    """__main__ is the user-facing surface and had no coverage at all."""
+
+    def run_cli(self, *args):
+        from fck.__main__ import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = main(list(args))
+        return code, buf.getvalue()
+
+    def test_default_prints_one_line(self):
+        code, out = self.run_cli("the deploy", "--seed", "1")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(out.strip().splitlines()), 1)
+        self.assertIn("the deploy", out)
+
+    def test_seed_makes_output_reproducible(self):
+        first = self.run_cli("x", "--seed", "7")[1]
+        second = self.run_cli("x", "--seed", "7")[1]
+        self.assertEqual(first, second)
+
+    def test_vent_prints_multiple_lines(self):
+        _, out = self.run_cli("x", "--vent", "--seed", "2")
+        self.assertEqual(len(out.strip().splitlines()), 6)
+
+    def test_breathe_runs_a_session(self):
+        _, out = self.run_cli("x", "--breathe", "--seed", "3")
+        self.assertIn("guided session", out)
+        self.assertIn("session complete", out)
+
+    def test_affirm_flag(self):
+        code, out = self.run_cli("x", "--affirm", "--seed", "4")
+        self.assertEqual(code, 0)
+        self.assertTrue(out.strip())
+
+    def test_bleep_flag_censors(self):
+        _, out = self.run_cli("x", "--bleep", "-i", "3", "--seed", "5")
+        for word in ("fuck", "shit"):
+            self.assertNotIn(word, out.lower())
+
+    def test_intensity_one_is_clean_via_cli(self):
+        for seed in range(25):
+            _, out = self.run_cli("x", "-i", "1", "--vent", "--seed", str(seed))
+            for word in ("fuck", "shit", "arse", "piss"):
+                self.assertNotIn(word, out.lower())
+
+    def test_rejects_out_of_range_intensity(self):
+        with self.assertRaises(SystemExit):
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.run_cli("x", "-i", "9")
+
+    def test_braces_in_cli_target_are_safe(self):
+        code, out = self.run_cli("{bogus}", "--seed", "6")
+        self.assertEqual(code, 0)
+        self.assertIn("{bogus}", out)
 
 
 class TestBleep(unittest.TestCase):
