@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # Manual run publishes to TestPyPI instead, for a dry run before the real thing.
+  workflow_dispatch:
+
+# Nothing is granted by default; each job asks for exactly what it needs.
+permissions: {}
+
+jobs:
+  build:
+    name: build and verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: python -m pip install build twine
+
+      - name: Refuse to release if the tag disagrees with pyproject
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          python - <<'PY'
+          import os, sys, tomllib
+          tag = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          with open("pyproject.toml", "rb") as fh:
+              version = tomllib.load(fh)["project"]["version"]
+          if tag != version:
+              sys.exit(f"tag {tag!r} != pyproject version {version!r}")
+          print(f"tag and version agree: {version}")
+          PY
+
+      - name: Run the tests once more against the tagged tree
+        run: python -m unittest discover -s tests
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Check the metadata PyPI will see
+        run: python -m twine check --strict dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    name: publish to TestPyPI (dry run)
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      # The OIDC token that replaces an API token. This is the whole mechanism.
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    name: publish to PyPI
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
