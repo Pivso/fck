@@ -1,5 +1,6 @@
 [build-system]
-requires = ["setuptools>=68"]
+# 77+ is what implements PEP 639 (SPDX license expressions, License-Expression).
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +9,11 @@ version = "0.1.0"
 description = "A mindfulness and wellbeing framework for people who are done."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+authors = [{ name = "Tomáš Cerman", email = "t.cerman@gmail.com" }]
+# PEP 639: an SPDX expression, not a table. Must NOT be paired with a
+# "License :: ..." trove classifier -- setuptools rejects that combination.
+license = "MIT"
+license-files = ["LICENSE"]
 
 [project.scripts]
 fck = "fck.__main__:main"
